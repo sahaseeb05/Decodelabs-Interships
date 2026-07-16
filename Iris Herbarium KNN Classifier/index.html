@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iris Herbarium — Live KNN Classifier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500;1,9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Original Theme Colors */
+    --paper: #F6ECD8;       /* Original Creamy Paper */
+    --paper-deep: #EFE1C3;  /* Original Deep Paper */
+    --card: #FBF4E6;        /* Original Card Background */
+    --ink: #3A2A1E;         /* Original Warm Espresso */
+    --ink-soft: #7A6A57;    /* Original Muted Cocoa */
+    --line: #DCC7A0;        /* Original Warm Latte Border */
+    --rust: #B54B32;        /* Original Rust Red */
+    --rust-deep: #8F3A26;   /* Original Deep Rust */
+    
+    /* Species Colors (With Darker Orange for Versicolor) */
+    --setosa: #E08E6D;      /* Original Soft Terracotta */
+    --versicolor: #B87B1D;  /* UPDATED: Darker, richer orange/amber (highly legible!) */
+    --virginica: #8C3B32;   /* Original Vintage Rose/Red */
+    
+    --shadow: 0 1px 2px rgba(58,42,30,0.05), 0 4px 12px rgba(58,42,30,0.03);
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0;
+    background: radial-gradient(1200px 800px at 15% -10%, #FFFFFF 0%, var(--paper) 45%, var(--paper-deep) 100%);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap{
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 28px 80px;
+  }
+
+  .eyebrow{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--rust-deep);
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .eyebrow::before{
+    content:"";
+    width: 22px; height: 1px;
+    background: var(--rust-deep);
+    display:inline-block;
+  }
+
+  h1{
+    font-family:'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(38px, 5.5vw, 64px);
+    line-height: 1.02;
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+  }
+
+  .lede{
+    max-width: 560px;
+    color: var(--ink-soft);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0 0 46px;
+  }
+  .lede b{ color: var(--ink); font-weight: 600; }
+
+  .layout{
+    display: grid;
+    grid-template-columns: 0.92fr 1.08fr;
+    gap: 40px;
+    align-items: start;
+  }
+
+  @media (max-width: 860px){
+    .layout{ grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Illustration panel ---------- */
+  .illus-panel{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 28px 20px 22px;
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 28px;
+  }
+  @media (max-width: 860px){ .illus-panel{ position: static; } }
+
+  .illus-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    display:flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .illus-title span:last-child{ color: var(--rust); }
+
+  svg#flower{ width:100%; height:auto; display:block; }
+
+  .measure-caption{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    text-align:center;
+    margin-top: 4px;
+  }
+  .measure-caption b{ color: var(--ink); font-weight:500; }
+
+  /* ---------- Controls ---------- */
+  .controls{
+    display:flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .slider-card{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .slider-row{
+    display:grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .slider-row:last-child{ border-bottom:none; }
+
+  .slider-label{
+    display:flex;
+    justify-content: space-between;
+    align-items:baseline;
+    font-size: 13.5px;
+  }
+  .slider-label .name{ color: var(--ink); font-weight: 500; }
+  .slider-label .val{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--rust-deep);
+    font-weight: 500;
+  }
+
+  input[type=range]{
+    -webkit-appearance:none;
+    width: 100%;
+    height: 4px;
+    background: var(--line);
+    border-radius: 4px;
+    outline:none;
+    margin: 2px 0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:16px; height:16px;
+    border-radius:50%;
+    background: var(--rust);
+    border: 3px solid var(--card);
+    box-shadow: 0 0 0 1px var(--rust);
+    cursor:pointer;
+    transition: transform .12s ease;
+  }
+  input[type=range]::-webkit-slider-thumb:hover{ transform: scale(1.12); }
+
+  .k-row{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .k-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color: var(--ink-soft);
+  }
+  .k-steps{ display:flex; gap:6px; }
+  .k-btn{
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition: all .15s ease;
+  }
+  .k-btn:hover{ border-color: var(--rust); color: var(--rust); }
+  .k-btn.active{
+    background: var(--rust);
+    border-color: var(--rust);
+    color: var(--card);
+    font-weight:600;
+  }
+
+  /* ---------- Result: the specimen card ---------- */
+  .specimen{
+    position: relative;
+    background: var(--card);
+    border: 1.5px dashed var(--line);
+    border-radius: 4px;
+    padding: 26px 24px 22px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .tape{
+    position:absolute;
+    top:-10px; right: 28px;
+    width: 74px; height: 26px;
+    background: rgba(181, 75, 50, 0.07); /* Soft rust tint */
+    border: 1px solid rgba(181, 75, 50, 0.2);
+    transform: rotate(4deg);
+    box-shadow: 0 2px 4px rgba(58,42,30,0.02);
+  }
+
+  .specimen-head{
+    display:flex;
+    justify-content: space-between;
+    align-items:flex-start;
+    margin-bottom: 4px;
+  }
+
+  .specimen-eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color: var(--ink-soft);
+  }
+
+  .verdict{
+    font-family:'Fraunces', serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 40px;
+    margin: 6px 0 2px;
+    transition: color .25s ease;
+  }
+
+  .verdict-sub{
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    margin-bottom: 20px;
+  }
+  .verdict-sub b{ color:var(--ink); font-weight:600; }
+
+  .bars{ display:flex; flex-direction:column; gap: 10px; margin-bottom: 22px; }
+  .bar-row{ display:grid; grid-template-columns: 92px 1fr 46px; align-items:center; gap: 10px; }
+  .bar-name{ font-size: 13px; font-weight:500; }
+  .bar-track{ height: 8px; background: var(--paper-deep); border-radius: 6px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:6px; width:0%; transition: width .35s cubic-bezier(.4,0,.2,1); }
+  .bar-pct{ font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--ink-soft); text-align:right; }
+
+  .neighbors{
+    border-top: 1px dashed var(--line);
+    padding-top: 16px;
+  }
+  .neighbors-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+  }
+  .neighbor-list{ display:flex; flex-direction:column; gap:7px; }
+  .neighbor{
+    display:grid;
+    grid-template-columns: 14px 1fr auto;
+    align-items:center;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .dot{ width:10px; height:10px; border-radius:50%; }
+  .neighbor .measurements{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .neighbor .dist{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  footer{
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    display:flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">DecodeLabs Field Guide — Project 2, Data Classification</div>
+  <h1>What flower is this?</h1>
+  <p class="lede">Drag the measurements below and watch a <b>K-Nearest Neighbors</b> model decide, live, by
+    comparing your specimen against all 150 real flowers in the Iris dataset — right here in your browser.</p>
+
+  <div class="layout">
+
+    <div class="illus-panel">
+      <div class="illus-title"><span>Specimen sketch</span><span id="species-tag">—</span></div>
+      <svg id="flower" viewBox="0 0 320 340" xmlns="http://www.w3.org/2000/svg">
+        <g id="sepal-group">
+          <ellipse id="sepal-l" cx="115" cy="205" rx="60" ry="26" fill="#EFE1C3" stroke="#7A6A57" stroke-width="1.4" transform="rotate(-28 115 205)"/>
+          <ellipse id="sepal-r" cx="205" cy="205" rx="60" ry="26" fill="#EFE1C3" stroke="#7A6A57" stroke-width="1.4" transform="rotate(28 205 205)"/>
+          <ellipse id="sepal-b" cx="160" cy="235" rx="60" ry="26" fill="#EFE1C3" stroke="#7A6A57" stroke-width="1.4" transform="rotate(90 160 235)"/>
+        </g>
+        <g id="petal-group">
+          <ellipse id="petal-l" cx="130" cy="140" rx="42" ry="19" fill="var(--setosa)" fill-opacity="0.65" stroke="var(--rust-deep)" stroke-width="1.4" transform="rotate(-18 130 140)"/>
+          <ellipse id="petal-r" cx="190" cy="140" rx="42" ry="19" fill="var(--setosa)" fill-opacity="0.65" stroke="var(--rust-deep)" stroke-width="1.4" transform="rotate(18 190 140)"/>
+          <ellipse id="petal-t" cx="160" cy="105" rx="42" ry="19" fill="var(--setosa)" fill-opacity="0.65" stroke="var(--rust-deep)" stroke-width="1.4" transform="rotate(90 160 105)"/>
+        </g>
+        <circle cx="160" cy="160" r="8" fill="var(--rust-deep)"/>
+        <line x1="160" y1="168" x2="160" y2="300" stroke="#7A6A57" stroke-width="2"/>
+        <path d="M160 250 C 120 250, 105 275, 90 285" fill="none" stroke="#7A6A57" stroke-width="2"/>
+        <path d="M160 270 C 200 270, 215 295, 230 305" fill="none" stroke="#7A6A57" stroke-width="2"/>
+      </svg>
+      <div class="measure-caption">petal <b id="cap-petal">— × —</b> cm &nbsp;·&nbsp; sepal <b id="cap-sepal">— × —</b> cm</div>
+    </div>
+
+    <div>
+      <div class="controls">
+
+        <div class="slider-card">
+          <div class="slider-row">
+            <div class="slider-label"><span class="name">Sepal length</span><span class="val" id="v-sl">5.9 cm</span></div>
+            <input type="range" id="s-sl" min="4.3" max="7.9" step="0.1" value="5.9">
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span class="name">Sepal width</span><span class="val" id="v-sw">3.0 cm</span></div>
+            <input type="range" id="s-sw" min="2.0" max="4.4" step="0.1" value="3.0">
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span class="name">Petal length</span><span class="val" id="v-pl">4.3 cm</span></div>
+            <input type="range" id="s-pl" min="1.0" max="6.9" step="0.1" value="4.3">
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span class="name">Petal width</span><span class="val" id="v-pw">1.3 cm</span></div>
+            <input type="range" id="s-pw" min="0.1" max="2.5" step="0.1" value="1.3">
+          </div>
+        </div>
+
+        <div class="slider-card">
+          <div class="k-row">
+            <span class="k-label">Neighbors consulted (K)</span>
+            <div class="k-steps" id="k-steps">
+              <button class="k-btn" data-k="1">1</button>
+              <button class="k-btn active" data-k="5">5</button>
+              <button class="k-btn" data-k="9">9</button>
+              <button class="k-btn" data-k="15">15</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="specimen">
+          <div class="tape"></div>
+          <div class="specimen-head">
+            <div>
+              <div class="specimen-eyebrow">Field notebook — verdict</div>
+              <div class="verdict" id="verdict">—</div>
+              <div class="verdict-sub" id="verdict-sub">Move a slider to classify a specimen.</div>
+            </div>
+          </div>
+
+          <div class="bars" id="bars"></div>
+
+          <div class="neighbors">
+            <div class="neighbors-title" id="neighbors-title">Nearest 5 specimens on record</div>
+            <div class="neighbor-list" id="neighbor-list"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Model: K-Nearest Neighbors · Distance: standardized Euclidean · Dataset: Iris (150 samples, live in-browser)</span>
+    <span>DecodeLabs · Project 2</span>
+  </footer>
+</div>
+
+<script>
+const DATA = [[5.1, 3.5, 1.4, 0.2, 0], [4.9, 3.0, 1.4, 0.2, 0], [4.7, 3.2, 1.3, 0.2, 0], [4.6, 3.1, 1.5, 0.2, 0], [5.0, 3.6, 1.4, 0.2, 0], [5.4, 3.9, 1.7, 0.4, 0], [4.6, 3.4, 1.4, 0.3, 0], [5.0, 3.4, 1.5, 0.2, 0], [4.4, 2.9, 1.4, 0.2, 0], [4.9, 3.1, 1.5, 0.1, 0], [5.4, 3.7, 1.5, 0.2, 0], [4.8, 3.4, 1.6, 0.2, 0], [4.8, 3.0, 1.4, 0.1, 0], [4.3, 3.0, 1.1, 0.1, 0], [5.8, 4.0, 1.2, 0.2, 0], [5.7, 4.4, 1.5, 0.4, 0], [5.4, 3.9, 1.3, 0.4, 0], [5.1, 3.5, 1.4, 0.3, 0], [5.7, 3.8, 1.7, 0.3, 0], [5.1, 3.8, 1.5, 0.3, 0], [5.4, 3.4, 1.7, 0.2, 0], [5.1, 3.7, 1.5, 0.4, 0], [4.6, 3.6, 1.0, 0.2, 0], [5.1, 3.3, 1.7, 0.5, 0], [4.8, 3.4, 1.9, 0.2, 0], [5.0, 3.0, 1.6, 0.2, 0], [5.0, 3.4, 1.6, 0.4, 0], [5.2, 3.5, 1.5, 0.2, 0], [5.2, 3.4, 1.4, 0.2, 0], [4.7, 3.2, 1.6, 0.2, 0], [4.8, 3.1, 1.6, 0.2, 0], [5.4, 3.4, 1.5, 0.4, 0], [5.2, 4.1, 1.5, 0.1, 0], [5.5, 4.2, 1.4, 0.2, 0], [4.9, 3.1, 1.5, 0.2, 0], [5.0, 3.2, 1.2, 0.2, 0], [5.5, 3.5, 1.3, 0.2, 0], [4.9, 3.6, 1.4, 0.1, 0], [4.4, 3.0, 1.3, 0.2, 0], [5.1, 3.4, 1.5, 0.2, 0], [5.0, 3.5, 1.3, 0.3, 0], [4.5, 2.3, 1.3, 0.3, 0], [4.4, 3.2, 1.3, 0.2, 0], [5.0, 3.5, 1.6, 0.6, 0], [5.1, 3.8, 1.9, 0.4, 0], [4.8, 3.0, 1.4, 0.3, 0], [5.1, 3.8, 1.6, 0.2, 0], [4.6, 3.2, 1.4, 0.2, 0], [5.3, 3.7, 1.5, 0.2, 0], [5.0, 3.3, 1.4, 0.2, 0], [7.0, 3.2, 4.7, 1.4, 1], [6.4, 3.2, 4.5, 1.5, 1], [6.9, 3.1, 4.9, 1.5, 1], [5.5, 2.3, 4.0, 1.3, 1], [6.5, 2.8, 4.6, 1.5, 1], [5.7, 2.8, 4.5, 1.3, 1], [6.3, 3.3, 4.7, 1.6, 1], [4.9, 2.4, 3.3, 1.0, 1], [6.6, 2.9, 4.6, 1.3, 1], [5.2, 2.7, 3.9, 1.4, 1], [5.0, 2.0, 3.5, 1.0, 1], [5.9, 3.0, 4.2, 1.5, 1], [6.0, 2.2, 4.0, 1.0, 1], [6.1, 2.9, 4.7, 1.4, 1], [5.6, 2.9, 3.6, 1.3, 1], [6.7, 3.1, 4.4, 1.4, 1], [5.6, 3.0, 4.5, 1.5, 1], [5.8, 2.7, 4.1, 1.0, 1], [6.2, 2.2, 4.5, 1.5, 1], [5.6, 2.5, 3.9, 1.1, 1], [5.9, 3.2, 4.8, 1.8, 1], [6.1, 2.8, 4.0, 1.3, 1], [6.3, 2.5, 4.9, 1.5, 1], [6.1, 2.8, 4.7, 1.2, 1], [6.4, 2.9, 4.3, 1.3, 1], [6.6, 3.0, 4.4, 1.4, 1], [6.8, 2.8, 4.8, 1.4, 1], [6.7, 3.0, 5.0, 1.7, 1], [6.0, 2.9, 4.5, 1.5, 1], [5.7, 2.6, 3.5, 1.0, 1], [5.5, 2.4, 3.8, 1.1, 1], [5.5, 2.4, 3.7, 1.0, 1], [5.8, 2.7, 3.9, 1.2, 1], [6.0, 2.7, 5.1, 1.6, 1], [5.4, 3.0, 4.5, 1.5, 1], [6.0, 3.4, 4.5, 1.6, 1], [6.7, 3.1, 4.7, 1.5, 1], [6.3, 2.3, 4.4, 1.3, 1], [5.6, 3.0, 4.1, 1.3, 1], [5.5, 2.5, 4.0, 1.3, 1], [5.5, 2.6, 4.4, 1.2, 1], [6.1, 3.0, 4.6, 1.4, 1], [5.8, 2.6, 4.0, 1.2, 1], [5.0, 2.3, 3.3, 1.0, 1], [5.6, 2.7, 4.2, 1.3, 1], [5.7, 3.0, 4.2, 1.2, 1], [5.7, 2.9, 4.2, 1.3, 1], [6.2, 2.9, 4.3, 1.3, 1], [5.1, 2.5, 3.0, 1.1, 1], [5.7, 2.8, 4.1, 1.3, 1], [6.3, 3.3, 6.0, 2.5, 2], [5.8, 2.7, 5.1, 1.9, 2], [7.1, 3.0, 5.9, 2.1, 2], [6.3, 2.9, 5.6, 1.8, 2], [6.5, 3.0, 5.8, 2.2, 2], [7.6, 3.0, 6.6, 2.1, 2], [4.9, 2.5, 4.5, 1.7, 2], [7.3, 2.9, 6.3, 1.8, 2], [6.7, 2.5, 5.8, 1.8, 2], [7.2, 3.6, 6.1, 2.5, 2], [6.5, 3.2, 5.1, 2.0, 2], [6.4, 2.7, 5.3, 1.9, 2], [6.8, 3.0, 5.5, 2.1, 2], [5.7, 2.5, 5.0, 2.0, 2], [5.8, 2.8, 5.1, 2.4, 2], [6.4, 3.2, 5.3, 2.3, 2], [6.5, 3.0, 5.5, 1.8, 2], [7.7, 3.8, 6.7, 2.2, 2], [7.7, 2.6, 6.9, 2.3, 2], [6.0, 2.2, 5.0, 1.5, 2], [6.9, 3.2, 5.7, 2.3, 2], [5.6, 2.8, 4.9, 2.0, 2], [7.7, 2.8, 6.7, 2.0, 2], [6.3, 2.7, 4.9, 1.8, 2], [6.7, 3.3, 5.7, 2.1, 2], [7.2, 3.2, 6.0, 1.8, 2], [6.2, 2.8, 4.8, 1.8, 2], [6.1, 3.0, 4.9, 1.8, 2], [6.4, 2.8, 5.6, 2.1, 2], [7.2, 3.0, 5.8, 1.6, 2], [7.4, 2.8, 6.1, 1.9, 2], [7.9, 3.8, 6.4, 2.0, 2], [6.4, 2.8, 5.6, 2.2, 2], [6.3, 2.8, 5.1, 1.5, 2], [6.1, 2.6, 5.6, 1.4, 2], [7.7, 3.0, 6.1, 2.3, 2], [6.3, 3.4, 5.6, 2.4, 2], [6.4, 3.1, 5.5, 1.8, 2], [6.0, 3.0, 4.8, 1.8, 2], [6.9, 3.1, 5.4, 2.1, 2], [6.7, 3.1, 5.6, 2.4, 2], [6.9, 3.1, 5.1, 2.3, 2], [5.8, 2.7, 5.1, 1.9, 2], [6.8, 3.2, 5.9, 2.3, 2], [6.7, 3.3, 5.7, 2.5, 2], [6.7, 3.0, 5.2, 2.3, 2], [6.3, 2.5, 5.0, 1.9, 2], [6.5, 3.0, 5.2, 2.0, 2], [6.2, 3.4, 5.4, 2.3, 2], [5.9, 3.0, 5.1, 1.8, 2]];
+
+const SPECIES = [
+  { name: "Setosa",     key: "setosa",     color: "#E08E6D" }, /* Terracotta */
+  { name: "Versicolor", key: "versicolor", color: "#B87B1D" }, /* UPDATED: Dark Orange */
+  { name: "Virginica",  key: "virginica",  color: "#8C3B32" }, /* Vintage Red */
+];
+
+// Precompute mean/std per feature for standardized distance
+const FEATS = 4;
+const means = new Array(FEATS).fill(0);
+const stds  = new Array(FEATS).fill(0);
+DATA.forEach(row => { for (let i=0;i<FEATS;i++) means[i]+=row[i]; });
+means.forEach((m,i)=> means[i] = m / DATA.length);
+DATA.forEach(row => { for (let i=0;i<FEATS;i++) stds[i]+=(row[i]-means[i])**2; });
+stds.forEach((s,i)=> stds[i] = Math.sqrt(s / DATA.length));
+
+function standardize(vec){
+  return vec.map((v,i)=> (v - means[i]) / stds[i]);
+}
+
+function classify(vec, k){
+  const z = standardize(vec);
+  const distances = DATA.map(row => {
+    const zr = standardize(row.slice(0,4));
+    let d = 0;
+    for (let i=0;i<FEATS;i++) d += (z[i]-zr[i])**2;
+    return { dist: Math.sqrt(d), row };
+  });
+  distances.sort((a,b)=> a.dist - b.dist);
+  const top = distances.slice(0, k);
+  
+  const tally = [0,0,0];
+  top.forEach(t => tally[t.row[4]]++);
+  
+  const total = k;
+  const winner = tally.indexOf(Math.max(...tally));
+  return { winner, tally, total, neighbors: top };
+}
+
+const sliders = {
+  sl: document.getElementById('s-sl'),
+  sw: document.getElementById('s-sw'),
+  pl: document.getElementById('s-pl'),
+  pw: document.getElementById('s-pw'),
+};
+const vals = {
+  sl: document.getElementById('v-sl'),
+  sw: document.getElementById('v-sw'),
+  pl: document.getElementById('v-pl'),
+  pw: document.getElementById('v-pw'),
+};
+
+let K = 5;
+document.querySelectorAll('.k-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.k-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    K = parseInt(btn.dataset.k, 10);
+    update();
+  });
+});
+
+const RANGES = { sl:[4.3,7.9], sw:[2.0,4.4], pl:[1.0,6.9], pw:[0.1,2.5] };
+function norm(key, v){
+  const [lo,hi] = RANGES[key];
+  return (v - lo) / (hi - lo);
+}
+
+function updateFlower(sl, sw, pl, pw){
+  const sepalScaleX = 0.7 + norm('sl', sl) * 0.6;
+  const sepalScaleY = 0.7 + norm('sw', sw) * 0.6;
+  const petalScaleX = 0.55 + norm('pl', pl) * 0.75;
+  const petalScaleY = 0.55 + norm('pw', pw) * 0.9;
+
+  document.getElementById('sepal-group').setAttribute('transform', `translate(160 205) scale(${sepalScaleX} ${sepalScaleY}) translate(-160 -205)`);
+  document.getElementById('petal-group').setAttribute('transform', `translate(160 140) scale(${petalScaleX} ${petalScaleY}) translate(-160 -140)`);
+
+  document.getElementById('cap-petal').textContent = `${pl.toFixed(1)} × ${pw.toFixed(1)}`;
+  document.getElementById('cap-sepal').textContent = `${sl.toFixed(1)} × ${sw.toFixed(1)}`;
+}
+
+function paintFlowerSpecies(colorHex){
+  ['petal-l','petal-r','petal-t'].forEach(id=>{
+    document.getElementById(id).setAttribute('fill', colorHex);
+  });
+}
+
+function update(){
+  const sl = parseFloat(sliders.sl.value);
+  const sw = parseFloat(sliders.sw.value);
+  const pl = parseFloat(sliders.pl.value);
+  const pw = parseFloat(sliders.pw.value);
+
+  vals.sl.textContent = `${sl.toFixed(1)} cm`;
+  vals.sw.textContent = `${sw.toFixed(1)} cm`;
+  vals.pl.textContent = `${pl.toFixed(1)} cm`;
+  vals.pw.textContent = `${pw.toFixed(1)} cm`;
+
+  updateFlower(sl, sw, pl, pw);
+
+  const result = classify([sl, sw, pl, pw], K);
+  const winnerSpecies = SPECIES[result.winner];
+
+  document.getElementById('species-tag').textContent = winnerSpecies.name;
+  document.getElementById('verdict').textContent = `Iris ${winnerSpecies.name}`;
+  document.getElementById('verdict').style.color = winnerSpecies.color;
+  paintFlowerSpecies(winnerSpecies.color);
+
+  const confidence = Math.round((result.tally[result.winner] / result.total) * 100);
+  document.getElementById('verdict-sub').innerHTML =
+    `<b>${confidence}%</b> of its ${K} nearest neighbors agree — classified by majority vote.`;
+
+  // bars
+  const barsEl = document.getElementById('bars');
+  barsEl.innerHTML = '';
+  SPECIES.forEach((sp, i)=>{
+    const pct = Math.round((result.tally[i] / result.total) * 100);
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <div class="bar-name">${sp.name}</div>
+      <div class="bar-track"><div class="bar-fill" style="background:${sp.color}"></div></div>
+      <div class="bar-pct">${pct}%</div>
+    `;
+    barsEl.appendChild(row);
+    requestAnimationFrame(()=>{ row.querySelector('.bar-fill').style.width = pct + '%'; });
+  });
+
+  // neighbor list
+  document.getElementById('neighbors-title').textContent = `Nearest ${K} specimen${K>1?'s':''} on record`;
+  const listEl = document.getElementById('neighbor-list');
+  listEl.innerHTML = '';
+  result.neighbors.forEach(n=>{
+    const sp = SPECIES[n.row[4]];
+    const item = document.createElement('div');
+    item.className = 'neighbor';
+    item.innerHTML = `
+      <span class="dot" style="background:${sp.color}"></span>
+      <span class="measurements">${n.row[0].toFixed(1)}, ${n.row[1].toFixed(1)}, ${n.row[2].toFixed(1)}, ${n.row[3].toFixed(1)} — ${sp.name}</span>
+      <span class="dist">Δ ${n.dist.toFixed(2)}</span>
+    `;
+    listEl.appendChild(item);
+  });
+}
+
+Object.values(sliders).forEach(s => s.addEventListener('input', update));
+update();
+</script>
+</body>
+</html>
